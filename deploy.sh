@@ -5,7 +5,7 @@
 set -e
 
 ROLE=${1:-master}
-REDIS_PASSWORD="L9zarK6YoCN18zcNKk6UKe3VanxcE3QBTVcQ13Xoyrk="
+REDIS_PASSWORD="${REDIS_PASSWORD:-L9zarK6YoCN18zcNKk6UKe3VanxcE3QBTVcQ13Xoyrk=}"
 REPO="https://github.com/Ajay-NooB143/omni-brain-v2.git"
 DEPLOY_DIR="/home/omni_brain_v2"
 
