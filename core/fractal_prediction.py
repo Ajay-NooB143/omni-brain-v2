@@ -1,11 +1,13 @@
-def calculate_dtw(pattern1, pattern2):
-    """Dynamic Time Warping distance between two patterns"""
+def calculate_dtw(pattern1, pattern2, band_width=10):
+    """Dynamic Time Warping distance with Sakoe-Chiba band to bound memory"""
     n, m = len(pattern1), len(pattern2)
     dtw_matrix = [[float('inf')] * (m + 1) for _ in range(n + 1)]
     dtw_matrix[0][0] = 0
-    
+
     for i in range(1, n + 1):
         for j in range(1, m + 1):
+            if abs(i - j) > band_width:
+                continue
             cost = abs(pattern1[i-1] - pattern2[j-1])
             dtw_matrix[i][j] = cost + min(
                 dtw_matrix[i-1][j],    # insertion

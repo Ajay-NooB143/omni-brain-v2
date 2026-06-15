@@ -1,17 +1,20 @@
+import os
 import redis
 import json
 import time
 from datetime import datetime
+from redis_utils import get_redis_connection
 
 class MasterOrchestrator:
-    def __init__(self, redis_host='localhost', redis_port=6379):
-        self.redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+    def __init__(self, redis_host=None, redis_port=None, account_balance=None):
+        self.redis = get_redis_connection(redis_host, redis_port)
         self.workers = {}
+        self.account_balance = account_balance or float(os.getenv('ACCOUNT_BALANCE', 10000))
     
     def register_worker(self, worker_id, pairs, account_allocation, max_daily_loss=2.0):
         worker_data = {
             'worker_id': worker_id,
-            'pairs': pairs,
+            'pairs': json.dumps(pairs),
             'account': account_allocation,
             'max_daily_loss': max_daily_loss,
             'registered_at': datetime.now().isoformat(),
@@ -43,7 +46,7 @@ class MasterOrchestrator:
                 total_exposure += exposure
         
         # Circuit breaker logic
-        loss_percent = abs(total_daily_pl) / 10000 * 100  # Assuming 10k total account
+        loss_percent = abs(total_daily_pl) / self.account_balance * 100
         circuit_breaker = 'ON' if loss_percent > 5.0 else 'OFF'
         
         triggered_workers = []
@@ -64,7 +67,7 @@ class MasterOrchestrator:
             },
             'risk': {
                 'total_exposure': total_exposure,
-                'exposure_percent': total_exposure / 10000 * 100,
+                'exposure_percent': total_exposure / self.account_balance * 100,
                 'max_drawdown': loss_percent,
                 'loss_percent': loss_percent
             },
@@ -79,8 +82,8 @@ class MasterOrchestrator:
         self.redis.lpush(f'queue:{worker_id}', json.dumps(work_data))
 
 class AuditSystem:
-    def __init__(self, redis_host='localhost', redis_port=6379):
-        self.redis = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+    def __init__(self, redis_host=None, redis_port=None):
+        self.redis = get_redis_connection(redis_host, redis_port)
     
     def log_worker_status(self, data):
         data['timestamp'] = datetime.now().isoformat()

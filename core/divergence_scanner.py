@@ -1,3 +1,11 @@
+def find_local_highs(series, lookback=5):
+    """Find local maxima in price series"""
+    highs = []
+    for i in range(lookback, len(series) - lookback):
+        if all(series[i] >= series[j] for j in range(i - lookback, i + lookback + 1)):
+            highs.append({'index': i, 'price': series[i]})
+    return highs
+
 def find_local_lows(series):
     """Find local minima in price/RSI series"""
     lows = []
@@ -27,11 +35,17 @@ def hidden_order_flow(price_series, rsi_series, timeframe):
                 "strength": calculate_divergence_magnitude(price_lows, rsi_lows),
                 "order_flow": "ACCUMULATION"
             }
+    price_highs = find_local_highs(price_series)
+    rsi_highs = find_local_highs(rsi_series)
+    
+    if len(price_highs) >= 2 and len(rsi_highs) >= 2:
         # Hidden bearish: price makes higher high, RSI makes lower high
-        if price_lows[-1] > price_lows[-2] and rsi_lows[-1] < rsi_lows[-2]:
+        if price_highs[-1]['price'] > price_highs[-2]['price'] and rsi_highs[-1]['price'] < rsi_highs[-2]['price']:
             return {
                 "type": "HIDDEN_BEARISH_DIV",
-                "strength": calculate_divergence_magnitude(price_lows, rsi_lows),
+                "strength": calculate_divergence_magnitude(
+                    [h['price'] for h in price_highs], [h['price'] for h in rsi_highs]
+                ),
                 "order_flow": "DISTRIBUTION"
             }
-    return {"type": "NONE", "order_flow": "NEUTRAL"}
+    return {"type": "NONE", "strength": 0, "order_flow": "NEUTRAL"}

@@ -1,8 +1,17 @@
+def validate_stops(sl_pips):
+    """Ensure stop loss is valid"""
+    if sl_pips <= 0:
+        raise ValueError("Stop loss must be > 0 pips")
+    return sl_pips
+
 def calculate_stops(position_size):
     """Calculate stop loss levels"""
+    sl = 20 * (position_size / 1000)
+    tp = 40 * (position_size / 1000)
+    validate_stops(sl)
     return {
-        "sl_pips": 20 * (position_size / 1000),
-        "tp_pips": 40 * (position_size / 1000)
+        "sl_pips": sl,
+        "tp_pips": tp
     }
 
 def dynamic_grid(confidence, market_weather, account_risk, portfolio_dd):
