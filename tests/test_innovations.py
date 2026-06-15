@@ -935,3 +935,118 @@ def test_ai_entry_validator_live():
     ]
     result = ai_entry_filter(setup_data, context, candles)
     assert result["action"] in ["EXECUTE", "REFINE", "BLOCK"]
+
+
+# === sentiment_pulse tests ===
+
+from modules.sentiment_pulse import (
+    SentimentPulse, TweetSentimentAnalyzer, RedditSentimentAnalyzer,
+    FearGreedIndexAPI, VIXSentimentMapper, MacroNewsScanner
+)
+
+
+def test_tweet_analyzer_sample_tweets():
+    analyzer = TweetSentimentAnalyzer()
+    score = analyzer.analyze("EURUSD", sample_tweets=[
+        "EURUSD is going to moon! Buy now!",
+        "Bullish breakout on EURUSD"
+    ])
+    assert score > 50  # Should be bullish
+
+
+def test_tweet_analyzer_bearish():
+    analyzer = TweetSentimentAnalyzer()
+    score = analyzer.analyze("EURUSD", sample_tweets=[
+        "EURUSD crash incoming, sell everything",
+        "Bearish breakdown, short this"
+    ])
+    assert score < 50  # Should be bearish
+
+
+def test_tweet_analyzer_neutral():
+    analyzer = TweetSentimentAnalyzer()
+    score = analyzer.analyze("EURUSD", sample_tweets=["Just watching the market"])
+    assert 40 <= score <= 60
+
+
+def test_tweet_analyzer_no_api_key():
+    analyzer = TweetSentimentAnalyzer()
+    score = analyzer.analyze("EURUSD")
+    assert score == 50  # Falls back to neutral
+
+
+def test_reddit_analyzer():
+    analyzer = RedditSentimentAnalyzer()
+    score = analyzer.analyze("EURUSD")
+    assert 0 <= score <= 100
+
+
+def test_fear_greed_index():
+    api = FearGreedIndexAPI()
+    score = api.get_index()
+    assert 0 <= score <= 100
+
+
+def test_vix_sentiment_mapper():
+    mapper = VIXSentimentMapper()
+    # Low VIX = high sentiment (greed)
+    assert mapper.sentiment_score(vix=10) > 70
+    # High VIX = low sentiment (fear)
+    assert mapper.sentiment_score(vix=40) < 30
+    # Mid VIX = neutral
+    assert 40 <= mapper.sentiment_score(vix=20) <= 60
+
+
+def test_vix_sentiment_extremes():
+    mapper = VIXSentimentMapper()
+    assert mapper.sentiment_score(vix=0) == 100   # Zero VIX = max greed
+    assert mapper.sentiment_score(vix=50) == 0    # VIX 50+ = max fear
+
+
+def test_macro_news_scanner():
+    scanner = MacroNewsScanner()
+    score = scanner.sentiment("EURUSD")
+    assert 0 <= score <= 100
+
+
+def test_macro_news_pair_to_ticker():
+    scanner = MacroNewsScanner()
+    assert scanner._pair_to_ticker("XAUUSD") == "GC=F"
+    assert scanner._pair_to_ticker("BTC") == "BTC-USD"
+    assert scanner._pair_to_ticker("USOIL") == "CL=F"
+
+
+def test_sentiment_pulse_composite():
+    pulse = SentimentPulse()
+    result = pulse.get_composite_sentiment("EURUSD")
+    assert "bullish_score" in result
+    assert "sources" in result
+    assert "signal" in result
+    assert 0 <= result["bullish_score"] <= 100
+    assert result["signal"] in ["STRONG_BULLISH", "BULLISH", "NEUTRAL", "BEARISH", "STRONG_BEARISH"]
+
+
+def test_sentiment_pulse_all_sources():
+    pulse = SentimentPulse()
+    result = pulse.get_composite_sentiment("BTC")
+    assert len(result["sources"]) == 5
+    for score in result["sources"].values():
+        assert 0 <= score <= 100
+
+
+def test_sentiment_pulse_signal_thresholds():
+    pulse = SentimentPulse()
+    # Test with mocked high scores
+    for source in pulse.sources.values():
+        if hasattr(source, 'analyze'):
+            source.analyze = lambda pair, **kw: 90
+        elif hasattr(source, 'get_index'):
+            source.get_index = lambda: 90
+        elif hasattr(source, 'sentiment_score'):
+            source.sentiment_score = lambda vix=None: 90
+        elif hasattr(source, 'sentiment'):
+            source.sentiment = lambda pair: 90
+
+    result = pulse.get_composite_sentiment("EURUSD")
+    assert result["bullish_score"] > 80
+    assert result["signal"] == "STRONG_BULLISH"
