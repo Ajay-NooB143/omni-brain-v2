@@ -35,7 +35,7 @@ VPS_CONFIG = {
     },
     'workers': {
         'worker-1': {
-            'vps_ip': 'XX.XX.XX.2',  # ← REPLACE WITH WORKER-1 IP
+            'vps_ip': '172.105.252.194',
             'redis_host': '172.105.252.194',
             'pairs': ['EURUSD', 'GBPUSD', 'AUDUSD'],
             'account_balance': 3333.33,
@@ -43,7 +43,7 @@ VPS_CONFIG = {
             'role': 'forex'
         },
         'worker-2': {
-            'vps_ip': 'XX.XX.XX.3',  # ← REPLACE WITH WORKER-2 IP
+            'vps_ip': '172.105.252.194',
             'redis_host': '172.105.252.194',
             'pairs': ['XAUUSD', 'USOIL'],
             'account_balance': 3333.33,
@@ -51,7 +51,7 @@ VPS_CONFIG = {
             'role': 'commodities'
         },
         'worker-3': {
-            'vps_ip': 'XX.XX.XX.4',  # ← REPLACE WITH WORKER-3 IP
+            'vps_ip': '172.105.252.194',
             'redis_host': '172.105.252.194',
             'pairs': ['BTC', 'ETH', 'BNB', 'SOL'],
             'account_balance': 3333.34,
