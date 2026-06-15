@@ -1,12 +1,36 @@
+import logging
+
+from core.fractal_prediction import calculate_dtw
+
+logger = logging.getLogger(__name__)
+
+
 class FractalModel:
+    def __init__(self):
+        self.min_pattern_len = 15
+
     def predict(self, market_data, timeframe):
+        closes = self._extract_closes(market_data)
+        if len(closes) < self.min_pattern_len:
+            return "HOLD"
+
+        half = len(closes) // 2
+        recent = closes[-half:]
+        earlier = closes[:half]
+
+        similarity = max(0, 100 - calculate_dtw(recent, earlier))
+
+        if similarity > 70:
+            return "BUY" if recent[-1] > recent[0] else "SELL"
         return "HOLD"
 
-    def update_accuracy(self, model_name, trade_result):
-        if trade_result == "WIN":
-            self.model_accuracy[model_name] = min(1.0, self.model_accuracy[model_name] + 0.05)
-        else:
-            self.model_accuracy[model_name] = max(0.0, self.model_accuracy[model_name] - 0.05)
+    @staticmethod
+    def _extract_closes(market_data):
+        if isinstance(market_data, dict):
+            return market_data.get("close", [])
+        if isinstance(market_data, list):
+            return market_data
+        return []
 
 
 class LiquidityModel:

@@ -40,9 +40,9 @@ def lyapunov_exponent(price_series, embedding_dim=5, tau=1):
                 min_dist = dist
                 min_idx = j
 
-        if min_idx >= 0 and min_idx + 1 < len(vectors):
-            # Distance after one time step
-            next_dist = sum((vectors[i][k] - vectors[min_idx][k]) ** 2 for k in range(embedding_dim)) ** 0.5
+        if min_idx >= 0 and i + 1 < len(vectors) and min_idx + 1 < len(vectors):
+            # Distance after one time step (divergence over time)
+            next_dist = sum((vectors[i+1][k] - vectors[min_idx+1][k]) ** 2 for k in range(embedding_dim)) ** 0.5
             if next_dist > 0 and min_dist > 0:
                 divergences.append(math.log(next_dist / min_dist))
 
