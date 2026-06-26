@@ -8,3 +8,8 @@ venv/
 .DS_Store
 dump.rdb
 *.log
+*.key
+*.pem
+node_modules/
+.pytest_cache/
+bridge_server.py
