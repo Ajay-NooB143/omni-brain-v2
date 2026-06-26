@@ -12,4 +12,3 @@ dump.rdb
 *.pem
 node_modules/
 .pytest_cache/
-bridge_server.py

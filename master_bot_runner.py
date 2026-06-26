@@ -35,27 +35,32 @@ def main():
     account_balance = float(os.getenv('ACCOUNT_BALANCE', 10000))
     max_daily_loss = float(os.getenv('MAX_DAILY_LOSS', 5.0))
 
+    try:
+        from redis_bridge import get_cluster_config, get_all_worker_ids, get_vps_config
+        cluster_cfg = get_cluster_config()
+        account_balance = cluster_cfg.get('initial_capital', account_balance)
+        max_daily_loss = cluster_cfg.get('max_daily_loss', max_daily_loss)
+        worker_ids = get_all_worker_ids()
+        workers = {}
+        for wid in worker_ids:
+            wc = get_vps_config(wid)
+            workers[wid] = {
+                'pairs': wc.get('pairs', []),
+                'account': float(wc.get('account_balance', 3333.33)),
+            }
+    except Exception:
+        workers = {
+            'worker-1': {'pairs': ['EURUSD', 'GBPUSD', 'AUDUSD'], 'account': 3333.33},
+            'worker-2': {'pairs': ['XAUUSD', 'USOIL'], 'account': 3333.33},
+            'worker-3': {'pairs': ['BTC', 'ETH', 'BNB', 'SOL'], 'account': 3333.34},
+        }
+
     master = MasterOrchestrator(
         redis_host=redis_host,
         redis_port=redis_port,
         account_balance=account_balance
     )
     audit = AuditSystem(redis_host=redis_host, redis_port=redis_port)
-
-    workers = {
-        'worker-1': {
-            'pairs': ['EURUSD', 'GBPUSD', 'AUDUSD'],
-            'account': 3333.33
-        },
-        'worker-2': {
-            'pairs': ['XAUUSD', 'USOIL'],
-            'account': 3333.33
-        },
-        'worker-3': {
-            'pairs': ['BTC', 'ETH', 'BNB', 'SOL'],
-            'account': 3333.34
-        }
-    }
 
     for worker_id, config in workers.items():
         result = master.register_worker(

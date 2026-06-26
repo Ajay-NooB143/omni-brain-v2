@@ -1,13 +1,37 @@
+import json
 import os
 import time
 import redis
 
 
 def get_redis_connection(host=None, port=None, password=None, max_retries=3):
-    """Redis connection with retry + exponential backoff"""
-    host = host or os.getenv('REDIS_HOST', 'localhost')
-    port = port or int(os.getenv('REDIS_PORT', '6379'))
+    """Redis connection with retry + exponential backoff
+
+    Credentials resolved in order:
+      1. explicit params (host/port/password)
+      2. REDIS_HOST / REDIS_PORT / REDIS_PASSWORD env vars
+      3. creds:redis hash in Redis itself (bridge bootstrap)
+    """
+    host = host or os.getenv('REDIS_HOST')
+    port = port or (int(os.getenv('REDIS_PORT')) if os.getenv('REDIS_PORT') else None)
     password = password or os.getenv('REDIS_PASSWORD')
+
+    if not host or not port:
+        try:
+            import urllib.request
+            bridge_url = os.getenv('BRIDGE_URL', '').rstrip('/')
+            if bridge_url:
+                req = urllib.request.Request(f'{bridge_url}/config/redis')
+                resp = urllib.request.urlopen(req, timeout=5)
+                data = json.loads(resp.read())
+                host = host or data.get('host', 'localhost')
+                port = port or int(data.get('port', 6379))
+                password = password or data.get('password', '')
+        except Exception:
+            pass
+
+    host = host or 'localhost'
+    port = port or 6379
 
     for attempt in range(max_retries):
         try:

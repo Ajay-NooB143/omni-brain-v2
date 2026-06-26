@@ -15,7 +15,8 @@ TRADING_MODE  = os.getenv('TRADING_MODE', 'paper')
 INITIAL_CAPITAL = float(os.getenv('INITIAL_CAPITAL', 10))
 MAX_DAILY_LOSS  = float(os.getenv('MAX_DAILY_LOSS', 1.0))
 
-os.environ['ANTHROPIC_API_KEY'] = os.environ.get('ANTHROPIC_API_KEY', 'sk-ant-PLACEHOLDER')
+from redis_bridge import get_api_key
+os.environ['ANTHROPIC_API_KEY'] = get_api_key('anthropic_key') or os.environ.get('ANTHROPIC_API_KEY', '')
 
 SEP = "=" * 65
 

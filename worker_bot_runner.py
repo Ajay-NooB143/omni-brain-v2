@@ -28,13 +28,28 @@ def main():
     worker_id = os.getenv('WORKER_ID')
     if not worker_id:
         raise ValueError("WORKER_ID env var required (worker-1, worker-2, worker-3)")
-    pairs = os.getenv('PAIRS', '').split(',')
-    pairs = [p.strip() for p in pairs if p.strip()]
-    if not pairs:
-        raise ValueError("PAIRS env var required (e.g. EURUSD,GBPUSD,AUDUSD)")
-    account = float(os.getenv('WORKER_ACCOUNT_BALANCE', '3333.33'))
+
+    pairs = []
+    account = 3333.33
     redis_host = os.getenv('REDIS_HOST', 'localhost')
     redis_port = int(os.getenv('REDIS_PORT', '6379'))
+
+    env_pairs = os.getenv('PAIRS', '')
+    if env_pairs:
+        pairs = [p.strip() for p in env_pairs.split(',') if p.strip()]
+    else:
+        try:
+            from redis_bridge import get_vps_config
+            wc = get_vps_config(worker_id)
+            pairs = wc.get('pairs', [])
+            account = float(wc.get('account_balance', 3333.33))
+            redis_host = wc.get('redis_host', redis_host)
+            redis_port = int(wc.get('redis_port', redis_port))
+        except Exception:
+            pass
+
+    if not pairs:
+        raise ValueError(f"No pairs configured for {worker_id}. Set PAIRS env or seed credentials.")
 
     logger.info(f"Starting {worker_id} for pairs: {pairs}")
 

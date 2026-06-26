@@ -9,9 +9,16 @@ from openai import OpenAI
 
 class AIEntryValidator:
     def __init__(self, max_retries=3):
+        api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            try:
+                from redis_bridge import get_api_key
+                api_key = get_api_key("openrouter_key") or get_api_key("anthropic_key")
+            except ImportError:
+                pass
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key=os.environ.get("OPENROUTER_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"),
+            api_key=api_key or "",
             default_headers={
                 "HTTP-Referer": "https://github.com/Ajay-NooB143/omni-brain-v2",
                 "X-Title": "OmniBrain V2",

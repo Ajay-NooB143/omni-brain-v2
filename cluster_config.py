@@ -1,184 +1,128 @@
 """OmniBrain V2 — Cluster Configuration
+All credentials stored in Redis, not hardcoded here.
+Uses redis_bridge.py to fetch configs at runtime.
 
-Maps VPS IPs to worker roles and pair assignments
-
-BEFORE DEPLOYMENT:
-Replace all XX.XX.XX.{1,2,3,4} with your actual VPS IPs
-
-Example:
-  Master:   185.100.87.1
-  Worker-1: 185.100.87.2
-  Worker-2: 185.100.87.3
-  Worker-3: 185.100.87.4
+DEPLOYMENT:
+  1. Set REDIS_HOST/REDIS_PORT/REDIS_PASSWORD in .env
+  2. Run: python3 seed_credentials.py
+  3. Config flows from Redis to all VPS instances
 """
-
+import json
 import os
+from redis_bridge import get_vps_config, get_all_worker_ids, get_api_key, get_broker_config, get_cluster_config
 
 
 def get_redis_password():
-    """Read from env, fallback to default (for local testing only)."""
-    return os.getenv('REDIS_PASSWORD', 'L9zarK6YoCN18zcNKk6UKe3VanxcE3QBTVcQ13Xoyrk=')
+    return os.getenv('REDIS_PASSWORD') or getattr(get_redis_creds_safe(), 'password', '')
 
 
-# ============================================
-# VPS CONFIGURATION
-# ============================================
-
-VPS_CONFIG = {
-    'master': {
-        'vps_ip': '172.105.252.194',
-        'redis_port': 6379,
-        'redis_password': get_redis_password(),
-        'account_balance': 10000,
-        'max_daily_loss': 5.0,
-        'role': 'orchestrator'
-    },
-    'workers': {
-        'worker-1': {
-            'vps_ip': '172.105.252.194',
-            'redis_host': '172.105.252.194',
-            'pairs': ['EURUSD', 'GBPUSD', 'AUDUSD'],
-            'account_balance': 3333.33,
-            'max_daily_loss': 2.0,
-            'role': 'forex'
-        },
-        'worker-2': {
-            'vps_ip': '172.105.252.194',
-            'redis_host': '172.105.252.194',
-            'pairs': ['XAUUSD', 'USOIL'],
-            'account_balance': 3333.33,
-            'max_daily_loss': 2.0,
-            'role': 'commodities'
-        },
-        'worker-3': {
-            'vps_ip': '172.105.252.194',
-            'redis_host': '172.105.252.194',
-            'pairs': ['BTC', 'ETH', 'BNB', 'SOL'],
-            'account_balance': 3333.34,
-            'max_daily_loss': 2.0,
-            'role': 'crypto'
-        }
-    }
-}
+def get_redis_creds_safe():
+    try:
+        from redis_bridge import get_redis_creds
+        return get_redis_creds()
+    except Exception:
+        return {}
 
 
-# ============================================
-# HELPER FUNCTIONS
-# ============================================
+VPS_CONFIG_CACHE = None
+
+
+def _load_config():
+    global VPS_CONFIG_CACHE
+    if VPS_CONFIG_CACHE is not None:
+        return VPS_CONFIG_CACHE
+
+    master = get_vps_config('master')
+    workers = {}
+    for wid in get_all_worker_ids():
+        try:
+            workers[wid] = get_vps_config(wid)
+        except ValueError:
+            pass
+
+    VPS_CONFIG_CACHE = {'master': master, 'workers': workers}
+    return VPS_CONFIG_CACHE
+
 
 def get_master_config():
-    """Return master node configuration."""
-    return VPS_CONFIG['master']
+    return _load_config()['master']
 
 
 def get_worker_config(worker_id):
-    """Return configuration for a specific worker."""
-    if worker_id not in VPS_CONFIG['workers']:
+    config = _load_config()
+    if worker_id not in config['workers']:
         raise ValueError(f"Unknown worker: {worker_id}")
-    return VPS_CONFIG['workers'][worker_id]
+    return config['workers'][worker_id]
 
 
 def get_all_workers():
-    """Return list of all worker IDs."""
-    return list(VPS_CONFIG['workers'].keys())
+    return list(_load_config()['workers'].keys())
 
 
 def get_redis_host():
-    """Return master Redis host IP."""
-    return VPS_CONFIG['master']['vps_ip']
+    return _load_config()['master'].get('redis_host', 'localhost')
 
 
 def validate_config():
-    """Validate that all IPs are configured (not placeholders)."""
-    errors = []
-
-    # Check master IP
-    if VPS_CONFIG['master']['vps_ip'].startswith('XX.XX.XX'):
-        errors.append("Master IP is still a placeholder (XX.XX.XX.1)")
-
-    # Check worker IPs
-    for worker_id, config in VPS_CONFIG['workers'].items():
-        if config['vps_ip'].startswith('XX.XX.XX'):
-            errors.append(f"{worker_id} IP is still a placeholder")
-        if config['redis_host'].startswith('XX.XX.XX'):
-            errors.append(f"{worker_id} redis_host is still a placeholder")
-
-    if errors:
-        print("Configuration errors:")
-        for error in errors:
-            print(f"  - {error}")
-        print("\nEdit cluster_config.py and replace XX.XX.XX.{1,2,3,4} with real IPs")
+    try:
+        cfg = _load_config()
+        errors = []
+        if cfg['master']['ip'].startswith('XX.XX.XX'):
+            errors.append("Master IP is still a placeholder")
+        for wid, wc in cfg['workers'].items():
+            if wc['ip'].startswith('XX.XX.XX'):
+                errors.append(f"{wid} IP is still a placeholder")
+        if errors:
+            print("Configuration errors (update via Redis):")
+            for e in errors:
+                print(f"  - {e}")
+            print("  Fix: HSET creds:vps:<role> ip '1.2.3.4'")
+            return False
+        return True
+    except Exception as e:
+        print(f"Config load error: {e}")
+        print("Run seed_credentials.py first or check Redis connection.")
         return False
 
-    return True
 
+DEPLOYMENT_STEPS = """OMNIBRAIN V2 — REDIS BRIDGE DEPLOYMENT
 
-# ============================================
-# DEPLOYMENT REFERENCE
-# ============================================
+1. SEED REDIS (one time, on master VPS):
+   source .env && python3 seed_credentials.py --api-key 'sk-ant-...'
 
-DEPLOYMENT_STEPS = """OMNIBRAIN V2 DEPLOYMENT CHECKLIST
+2. START BRIDGE SERVER (on master VPS):
+   python3 bridge_server.py
+   Or via start.sh: bash start.sh bridge
 
-1. UPDATE IPs IN THIS FILE
-   Edit cluster_config.py:
-   - Master:   XX.XX.XX.1 -> your_master_ip
-   - Worker-1: XX.XX.XX.2 -> your_worker1_ip
-   - Worker-2: XX.XX.XX.3 -> your_worker2_ip
-   - Worker-3: XX.XX.XX.4 -> your_worker3_ip
+3. REGISTER WORKER VPS (from each worker VPS):
+   curl -X POST http://<MASTER_IP>:8765/register \\
+     -H 'X-API-Key: <key>' \\
+     -d '{"role":"worker-1","ip":"<WORKER_IP>","pairs":["EURUSD","GBPUSD","AUDUSD"]}'
 
-2. DEPLOY MASTER VPS
-   ssh root@your_master_ip
-   cd /home/omni-brain-v2
-   bash deploy_master.sh
-
-3. DEPLOY WORKER VPS (repeat for each)
-   ssh root@your_worker1_ip
-   cd /home/omni-brain-v2
-   WORKER_ID=worker-1 PAIRS=EURUSD,GBPUSD,AUDUSD bash deploy_worker.sh
-
-   ssh root@your_worker2_ip
-   WORKER_ID=worker-2 PAIRS=XAUUSD,USOIL bash deploy_worker.sh
-
-   ssh root@your_worker3_ip
-   WORKER_ID=worker-3 PAIRS=BTC,ETH,BNB,SOL bash deploy_worker.sh
-
-4. VERIFY CLUSTER
-   From master VPS:
-   redis-cli -a "L9zarK6YoCN18zcNKk6UKe3VanxcE3QBTVcQ13Xoyrk=" SMEMBERS workers:active
-   # Should return: worker-1, worker-2, worker-3
-
-5. SEND TEST SIGNAL
-   redis-cli -a "L9zarK6YoCN18zcNKk6UKe3VanxcE3QBTVcQ13Xoyrk=" RPUSH queue:worker-1 \
-   '{"work_id":"test-001","pair":"EURUSD","action":"OPEN","direction":"BUY","size":1.5,"entry":1.095}'
-
-6. MONITOR
-   redis-cli -a "L9zarK6YoCN18zcNKk6UKe3VanxcE3QBTVcQ13Xoyrk=" MONITOR
+4. START WORKERS (on each VPS):
+   bash start.sh master   # on master
+   bash start.sh worker-1 # on worker-1
 """
 
 
-# ============================================
-# OUTPUT
-# ============================================
-
 if __name__ == '__main__':
-    print("OmniBrain V2 Cluster Configuration")
+    print("OmniBrain V2 — Cluster Configuration (Redis Bridge)")
     print("=" * 60)
     print()
-
-    if validate_config():
-        print("Configuration valid")
-        print()
-        print("Master:")
-        print(f"  IP: {VPS_CONFIG['master']['vps_ip']}")
-        print(f"  Account: ${VPS_CONFIG['master']['account_balance']}")
+    try:
+        cfg = _load_config()
+        print(f"Master: {cfg['master'].get('ip', 'unknown')}")
+        print(f"  Account: ${cfg['master'].get('account_balance', '?')}")
         print()
         print("Workers:")
-        for worker_id, config in VPS_CONFIG['workers'].items():
-            print(f"  {worker_id} ({config['role']})")
-            print(f"    IP: {config['vps_ip']}")
-            print(f"    Pairs: {', '.join(config['pairs'])}")
-            print(f"    Account: ${config['account_balance']}")
-        print()
-    else:
-        print()
-        print("Edit cluster_config.py before deployment")
+        for wid, wc in cfg['workers'].items():
+            pairs = wc.get('pairs', [])
+            if isinstance(pairs, str):
+                pairs = json.loads(pairs)
+            print(f"  {wid} ({wc.get('role', '?')})")
+            print(f"    IP: {wc.get('ip', '?')}")
+            print(f"    Pairs: {', '.join(pairs)}")
+            print(f"    Account: ${wc.get('account_balance', '?')}")
+    except Exception as e:
+        print(f"Error: {e}")
+        print("Run: python3 seed_credentials.py")

@@ -1,26 +1,34 @@
-# OmniBrain v2 - Multi-Timeframe Forex Trading System
+# OmniBrain v2 — Multi-Timeframe Forex Trading System
 
-A hierarchical cluster deployment for algorithmic forex trading with AI validation, fractal pattern recognition, dynamic risk management, and tiered signal delivery.
+Redis-bridged cluster deployment for algorithmic trading with AI validation, fractal pattern recognition, dynamic risk management, and tiered signal delivery.
+
+**Credentials live in Redis, not in Python files.** No hardcoded secrets. All VPS instances read their config from a central Redis bridge.
 
 ## Architecture
 
 ```
-                    MASTER BOT (Main Orchestrator)
-                    [master.example.com]
-                         |
+                    BRIDGE SERVER (HTTP API)
+                    [master VPS :8765]
+                          |
+                    REDIS (credential store + message bus)
+                          |
          ________________|________________
          |                |                |
    WORKER-1         WORKER-2       WORKER-3
- [worker1.com]    [worker2.com]   [worker3.com]
  (EU pairs)       (GOLD/OIL)      (CRYPTO)
          |                |                |
-   [Redis Queue]   [Redis Queue]   [Redis Queue]
+   [BLPOP queue]   [BLPOP queue]   [BLPOP queue]
       |________________|________________|
                        |
-                  AUDIT SYSTEM
-            (Central Logging/Compliance)
-            [Redis Backend]
+              AUDIT SYSTEM (Redis Lists)
+                 + MT5 BRIDGE (Windows VPS)
 ```
+
+### Key Differences from V1
+- **No hardcoded IPs/passwords** — all config in Redis `creds:*` hashes
+- **`bridge_server.py`** — HTTP API for VPS registration + MT5 bridge
+- **`redis_bridge.py`** — single import for all credential reads
+- **`seed_credentials.py`** — one-time Redis population script
 
 ## Features
 
@@ -62,7 +70,7 @@ git clone https://github.com/YOUR_USERNAME/omni-brain-v2.git
 cd omni-brain-v2
 
 # Create venv
-python3.11 -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
@@ -70,44 +78,75 @@ pip install -e .
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your keys
+# Edit .env with Redis connection
 
 # Start Redis
 redis-server --daemonize yes
 
-# Run master (terminal 1)
+# Seed credentials into Redis (one time)
+python seed_credentials.py --api-key 'sk-ant-xxx'
+
+# Start bridge server (terminal 1)
+python bridge_server.py
+
+# Run master (terminal 2)
 python master_bot_runner.py
 
-# Run worker (terminal 2)
-WORKER_ID=worker-1 PAIRS=EURUSD,GBPUSD,AUDUSD ACCOUNT_BALANCE=3333.33 python worker_bot_runner.py
+# Run worker (terminal 3)
+WORKER_ID=worker-1 PAIRS=EURUSD,GBPUSD,AUDUSD python worker_bot_runner.py
 ```
 
-### Production Deployment
+### Production Deployment (Redis Bridge)
 
-See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for full 4-VPS deployment instructions.
+No SSH between VPS instances. Everything flows through Redis.
+
+```bash
+# 1. Deploy master VPS
+ssh root@master_vps
+bash deploy.sh master
+nano .env                              # set REDIS_PASSWORD + BRIDGE_API_KEY
+python seed_credentials.py --api-key 'sk-ant-xxx' --broker-host 'windows_vps_ip'
+bash start.sh bridge                   # starts HTTP API on port 8765
+bash start.sh master
+
+# 2. Register workers (from any machine)
+curl -X POST http://<MASTER_IP>:8765/register \
+  -H 'X-API-Key: <key>' \
+  -d '{"role":"worker-1","ip":"<WORKER_IP>","pairs":["EURUSD","GBPUSD","AUDUSD"]}'
+
+# 3. Deploy worker VPS
+ssh root@worker1_vps
+bash deploy.sh worker-1
+nano .env                              # set REDIS_HOST=<MASTER_IP> + REDIS_PASSWORD
+bash start.sh worker-1
+```
 
 ## Project Structure
 
 ```
 omni-brain-v2/
-├── core/
-│   ├── market_weather.py      # Regime classification
-│   ├── fractal_prediction.py  # DTW cross-timeframe analysis
-│   ├── risk_manager.py        # Adaptive sizing & grids
-│   ├── divergence_scanner.py  # Hidden RSI divergence
-│   └── correlation_breakdown.py # Correlation arbitrage
-├── modules/
-│   ├── ai_entry_validator.py     # Claude 3.5 validation
-│   ├── subscription_signals.py   # Tiered delivery
-│   ├── yield_arbitrage_radar.py  # Yield spike detection
-│   ├── youtube_telegram_sync.py  # YT → Telegram
-│   └── instagram_telegram_bridge.py # IG → Telegram
-├── master_bot.py           # Cluster orchestrator
-├── worker_bot.py           # Worker execution engine
-├── audit_system.py         # Compliance logging
-├── cluster_config.py       # VPS configuration
-├── master_bot_runner.py    # Master entry point
-├── worker_bot_runner.py    # Worker entry point
+├── core/                          # Trading analysis engines
+│   ├── market_weather.py          # Regime classification
+│   ├── fractal_prediction.py      # DTW cross-timeframe analysis
+│   ├── risk_manager.py            # Adaptive sizing & grids
+│   ├── divergence_scanner.py      # Hidden RSI divergence
+│   └── correlation_breakdown.py   # Correlation arbitrage
+├── modules/                       # Application modules
+│   ├── ai_entry_validator.py      # Claude 3.5 validation
+│   ├── subscription_signals.py    # Tiered delivery
+│   ├── yield_arbitrage_radar.py   # Yield spike detection
+│   └── ...                        # Sentiment, geopolitics, etc.
+├── redis_bridge.py                # Credential bridge (all secrets from Redis)
+├── bridge_server.py               # HTTP API for VPS registration + MT5 bridge
+├── seed_credentials.py            # One-time Redis credential seeder
+├── master_bot.py                  # Cluster orchestrator
+├── worker_bot.py                  # Worker execution engine
+├── audit_system.py                # Compliance logging
+├── cluster_config.py              # Config reader (reads from Redis bridge)
+├── master_bot_runner.py           # Master entry point
+├── worker_bot_runner.py           # Worker entry point
+├── deploy.sh                      # VPS deployment script
+├── start.sh                       # Start/stop/status
 └── requirements.txt
 ```
 
@@ -127,13 +166,13 @@ omni-brain-v2/
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| ANTHROPIC_API_KEY | Yes | Claude API key for AI validation |
-| REDIS_HOST | Yes | Master Redis IP |
+| REDIS_HOST | Yes | Redis host (master IP for workers) |
 | REDIS_PORT | Yes | Redis port (default 6379) |
-| WORKER_ID | Workers only | worker-1, worker-2, or worker-3 |
-| PAIRS | Workers only | Comma-separated pair list |
-| ACCOUNT_BALANCE | Yes | Allocated capital |
-| MAX_DAILY_LOSS | Yes | Circuit breaker % |
+| REDIS_PASSWORD | Yes | Redis password |
+| BRIDGE_URL | No | HTTP bridge URL for bootstrap |
+| BRIDGE_API_KEY | No | Bridge API key for auth |
+
+All other configs (API keys, broker config, VPS IPs, worker pairs) are stored in Redis hashes and managed via `seed_credentials.py` or the bridge API.
 
 ## Compliance & Auditing
 
