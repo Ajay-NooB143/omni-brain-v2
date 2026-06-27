@@ -93,7 +93,7 @@ def seed_default_credentials(redis_password=None):
         'password': redis_password or os.getenv('REDIS_PASSWORD', ''),
     })
     r.hset('creds:vps:master', mapping={
-        'ip': os.getenv('VPS_IP', '172.105.252.194'),
+        'ip': os.getenv('VPS_IP', ''),
         'redis_host': os.getenv('REDIS_HOST', 'localhost'),
         'redis_port': os.getenv('REDIS_PORT', '6379'),
         'account_balance': os.getenv('ACCOUNT_BALANCE', '10000'),
@@ -106,7 +106,7 @@ def seed_default_credentials(redis_password=None):
         ('worker-3', ['BTC', 'ETH', 'BNB', 'SOL'], 3333.34),
     ]:
         r.hset(f'creds:vps:{wid}', mapping={
-            'ip': os.getenv(f'{wid.upper()}_IP', '172.105.252.194'),
+            'ip': os.getenv(f'{wid.upper()}_IP', ''),
             'redis_host': os.getenv('REDIS_HOST', 'localhost'),
             'redis_port': os.getenv('REDIS_PORT', '6379'),
             'pairs': json.dumps(pairs),
