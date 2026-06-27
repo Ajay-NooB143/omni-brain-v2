@@ -12,10 +12,16 @@ from redis_utils import get_redis_connection
 from redis_bridge import seed_default_credentials, set_credential
 
 BRIDGE_PORT = int(os.getenv('BRIDGE_PORT', '8765'))
-BRIDGE_KEY = os.getenv('BRIDGE_API_KEY', '')  # set this in .env!
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
+
+# --- Enforce authentication ---
+BRIDGE_KEY = os.getenv('BRIDGE_API_KEY', '')
+if not BRIDGE_KEY:
+    print("[FATAL] BRIDGE_API_KEY is not set. Bridge server refuses to start without auth.")
+    print("Set BRIDGE_API_KEY in your .env or environment before running.")
+    sys.exit(1)
 
 
 def _r():
@@ -24,7 +30,7 @@ def _r():
 
 class BridgeHandler(BaseHTTPRequestHandler):
     def _auth(self):
-        if BRIDGE_KEY and self.headers.get('X-API-Key') != BRIDGE_KEY:
+        if self.headers.get('X-API-Key') != BRIDGE_KEY:
             self.send_json(401, {'error': 'Unauthorized'})
             return False
         return True
@@ -132,7 +138,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
 def main():
     print(f"OmniBrain Bridge Server — port {BRIDGE_PORT}")
     print(f"  Redis: {REDIS_HOST}:{REDIS_PORT}")
-    print(f"  API Key: {'set' if BRIDGE_KEY else 'NOT SET (insecure)'}")
+    print(f"  API Key: set (auth required)")
     print()
     print("  POST /seed                  — seed default credentials into Redis")
     print("  POST /register              — register a VPS instance")
