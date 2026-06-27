@@ -1,200 +1,329 @@
-# OmniBrain v2 — Multi-Timeframe Forex Trading System
+# OMNI BRAIN V2
 
-Redis-bridged cluster deployment for algorithmic trading with AI validation, fractal pattern recognition, dynamic risk management, and tiered signal delivery.
+**Institutional-grade algorithmic trading system** running entirely on Android (UserLand Ubuntu) + VPS.
 
-**Credentials live in Redis, not in Python files.** No hardcoded secrets. All VPS instances read their config from a central Redis bridge.
+Multi-timeframe SMC trading engine with AI-powered confidence scoring, correlation arbitrage, dynamic risk management, and Telegram signal distribution.
+
+## Features
+
+### Core Trading Logic
+
+- **Confidence Scoring**: 175-point system (OB + FVG + Sweep + VWAP + Session + Correlation + Yield + Sentiment + Pattern + Divergence) capped at 100
+- **Multi-Timeframe Confirmation**: D1 bias → H1 setup → M15 entry precision
+- **SMC Market Structure**: Order blocks, fair value gaps, liquidity sweeps, BOS/CHoCH
+- **Risk Management**: Dynamic position sizing, adaptive grid, circuit breaker
+
+### Signal Generation
+
+- **Sentiment Analysis**: News + social media + macro events
+- **Correlation Arbitrage**: EURUSD vs GBPUSD, XAUUSD vs DXY, sector monitoring
+- **Pattern Recognition**: Hidden divergences, institutional clustering, order flow imbalance
+
+### Execution & Monitoring
+
+- **Paper Trader**: Virtual $10k account with P&L tracking
+- **Telegram Bot**: Real-time alerts, VIP tier scheduling (free 30min delay, VIP instant)
+- **Live MT5 Sync**: Pull current XAUUSD/EURUSD/GBPUSD/SP500/BTC data
+- **Logging**: Trade journal, equity curve, drawdown monitoring
+
+### Assets Supported
+
+- **Forex**: EURUSD, GBPUSD, AUDUSD, NZDUSD, USDJPY
+- **Commodities**: XAUUSD (Gold), USOIL (Crude Oil)
+- **Indices**: SP500 (S&P 500)
+- **Crypto**: BTC, ETH, BNB, SOL, XRP
 
 ## Architecture
 
 ```
-                    BRIDGE SERVER (HTTP API)
-                    [master VPS :8765]
-                          |
-                    REDIS (credential store + message bus)
-                          |
-         ________________|________________
-         |                |                |
-   WORKER-1         WORKER-2       WORKER-3
- (EU pairs)       (GOLD/OIL)      (CRYPTO)
-         |                |                |
-   [BLPOP queue]   [BLPOP queue]   [BLPOP queue]
-      |________________|________________|
-                       |
-              AUDIT SYSTEM (Redis Lists)
-                 + MT5 BRIDGE (Windows VPS)
+omni-brain-v2/
+├── core/
+│   ├── confidence_scorer.py       # 175-point system
+│   ├── mtf_confirmation.py        # D1→H1→M15 validation
+│   ├── risk_manager.py            # Position sizing, grid, circuit breaker
+│   └── __init__.py
+├── modules/
+│   ├── sentiment_engine.py        # News/social/macro analysis
+│   ├── correlation_engine.py      # Pair correlations, breakdowns
+│   ├── telegram_signals.py        # Bot distribution [stub]
+│   ├── paper_trader.py            # Virtual trading [stub]
+│   └── __init__.py
+├── lte_v35_v2.py                  # Orchestrator: integrates all modules
+├── tests/
+│   └── test_omni_v2.py            # 40+ unit + integration tests
+├── pyproject.toml                 # Dependencies, config
+└── README.md
 ```
 
-### Key Differences from V1
-- **No hardcoded IPs/passwords** — all config in Redis `creds:*` hashes
-- **`bridge_server.py`** — HTTP API for VPS registration + MT5 bridge
-- **`redis_bridge.py`** — single import for all credential reads
-- **`seed_credentials.py`** — one-time Redis population script
+## Confidence Scoring System
 
-## Features
+**175-point scale → capped at 100:**
 
-### Core Trading Engine
-- **Market Weather Classification** - SUNNY/FOGGY/STORMY regimes via ATR ratio, VIX, correlation stress
-- **Fractal Prediction** - Cross-timeframe self-similarity (DTW on D1/H1/M15) for entry prediction
-- **Dynamic Risk Management** - Adaptive position sizing + grid levels based on confidence & market weather
-- **Hidden Divergence Scanner** - RSI/price divergence → institutional order flow detection
-- **Correlation Breakdown Alerts** - Arbitrage alerts (e.g., XAUUSD vs DXY deviation > 0.25)
+| Component | Points | Triggers |
+|-----------|--------|----------|
+| Order Block (OB) | 20 | Price inside, multiple touches |
+| Fair Value Gap (FVG) | 20 | Proximity, unfilled |
+| Liquidity Sweep | 30 | Buy/sell sweep magnitude |
+| VWAP | 15 | Price band alignment |
+| Session | 15 | London/NY killzone |
+| Correlation | 15 | Pair strength |
+| Treasury Yield | 10 | USD rate impact |
+| Sentiment | 10 | News/social/macro |
+| Pattern | 20 | Chart patterns |
+| Divergence | 20 | RSI/price hidden divs |
+| **TOTAL** | **175** | → **Capped 100** |
 
-### AI Validation
-- **Claude 3.5 Sonnet Integration** - Real-time setup validation (EXECUTE/REFINE/BLOCK)
-- **Two-pass Analysis** - Verdict + risk/reward assessment
+**Thresholds:**
+- **EXECUTE**: Confidence ≥ 75
+- **WAIT**: Confidence 50-74
+- **BLOCK**: Confidence < 50
 
-### Signal Delivery
-- **Tiered Subscriptions** - VIP (instant, 2x size), PRO (15min delay, 1.5x), FREE (30min delay, 1x)
-- **Yield Arbitrage Radar** - Treasury yield spike → DXY/Gold/JPY cascade detection
-- **Content-Trade Sync** - YouTube/Instagram → Telegram bridge with 15min delay
+## Setup
 
-### Cluster Architecture
-- **Master Orchestrator** - Work distribution, circuit breakers, cluster health monitoring
-- **3 Specialized Workers** - EU pairs, Gold/Oil, Crypto
-- **Central Audit System** - Compliance logging, CSV export, circuit breaker tracking
-- **PM2 Process Management** - Auto-restart, logging, startup persistence
+### Requirements
 
-## Quick Start
-
-### Prerequisites
 - Python 3.11+
-- Redis server
-- Anthropic API key
-- 4 VPS instances (1 master + 3 workers)
+- MetaTrader 5 (for live data)
+- Telegram Bot Token
+- UserLand Ubuntu (on Android) or Linux VPS
 
-### Local Development
+### Installation
 
 ```bash
 # Clone repo
 git clone https://github.com/YOUR_USERNAME/omni-brain-v2.git
 cd omni-brain-v2
 
-# Create venv
-python3 -m venv venv
-source venv/bin/activate
-
 # Install dependencies
 pip install -e .
 
-# Configure environment
-cp .env.example .env
-# Edit .env with Redis connection
+# Install dev tools (testing, linting)
+pip install -e ".[dev]"
 
-# Start Redis
-redis-server --daemonize yes
-
-# Seed credentials into Redis (one time)
-python seed_credentials.py --api-key 'sk-ant-xxx'
-
-# Start bridge server (terminal 1)
-python bridge_server.py
-
-# Run master (terminal 2)
-python master_bot_runner.py
-
-# Run worker (terminal 3)
-WORKER_ID=worker-1 PAIRS=EURUSD,GBPUSD,AUDUSD python worker_bot_runner.py
+# Install ML/data extras (optional)
+pip install -e ".[ml,data]"
 ```
 
-### Production Deployment (Redis Bridge)
+### Configuration
 
-No SSH between VPS instances. Everything flows through Redis.
+Create `.env`:
 
 ```bash
-# 1. Deploy master VPS
-ssh root@master_vps
-bash deploy.sh master
-nano .env                              # set REDIS_PASSWORD + BRIDGE_API_KEY
-python seed_credentials.py --api-key 'sk-ant-xxx' --broker-host 'windows_vps_ip'
-bash start.sh bridge                   # starts HTTP API on port 8765
-bash start.sh master
-
-# 2. Register workers (from any machine)
-curl -X POST http://<MASTER_IP>:8765/register \
-  -H 'X-API-Key: <key>' \
-  -d '{"role":"worker-1","ip":"<WORKER_IP>","pairs":["EURUSD","GBPUSD","AUDUSD"]}'
-
-# 3. Deploy worker VPS
-ssh root@worker1_vps
-bash deploy.sh worker-1
-nano .env                              # set REDIS_HOST=<MASTER_IP> + REDIS_PASSWORD
-bash start.sh worker-1
+MT5_LOGIN=123456789
+MT5_PASSWORD=your_password
+MT5_SERVER=YourBroker-Demo
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHANNEL_ID=your_channel_id
+ACCOUNT_BALANCE=10000
+RISK_PERCENT=1.0
+MAX_DAILY_LOSS=5.0
 ```
 
-## Project Structure
+### Running
 
-```
-omni-brain-v2/
-├── core/                          # Trading analysis engines
-│   ├── market_weather.py          # Regime classification
-│   ├── fractal_prediction.py      # DTW cross-timeframe analysis
-│   ├── risk_manager.py            # Adaptive sizing & grids
-│   ├── divergence_scanner.py      # Hidden RSI divergence
-│   └── correlation_breakdown.py   # Correlation arbitrage
-├── modules/                       # Application modules
-│   ├── ai_entry_validator.py      # Claude 3.5 validation
-│   ├── subscription_signals.py    # Tiered delivery
-│   ├── yield_arbitrage_radar.py   # Yield spike detection
-│   └── ...                        # Sentiment, geopolitics, etc.
-├── redis_bridge.py                # Credential bridge (all secrets from Redis)
-├── bridge_server.py               # HTTP API for VPS registration + MT5 bridge
-├── seed_credentials.py            # One-time Redis credential seeder
-├── master_bot.py                  # Cluster orchestrator
-├── worker_bot.py                  # Worker execution engine
-├── audit_system.py                # Compliance logging
-├── cluster_config.py              # Config reader (reads from Redis bridge)
-├── master_bot_runner.py           # Master entry point
-├── worker_bot_runner.py           # Worker entry point
-├── deploy.sh                      # VPS deployment script
-├── start.sh                       # Start/stop/status
-└── requirements.txt
-```
-
-## Key Thresholds
-
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| Fractal Score | > 75 | Valid self-similar pattern |
-| Correlation Deviation | > 0.25 | Arbitrage trigger |
-| Yield Spike | > 0.05 (5bps) | Cascade alert |
-| Market Weather STORMY | ATR ratio > 2.0 or corr > 0.85 | 0.5x size |
-| Market Weather FOGGY | News impact > 0.7 | Block trades |
-| Worker Daily Loss | > 2% | Pause worker |
-| Cluster Daily Loss | > 5% | Stop all |
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| REDIS_HOST | Yes | Redis host (master IP for workers) |
-| REDIS_PORT | Yes | Redis port (default 6379) |
-| REDIS_PASSWORD | Yes | Redis password |
-| BRIDGE_URL | No | HTTP bridge URL for bootstrap |
-| BRIDGE_API_KEY | No | Bridge API key for auth |
-
-All other configs (API keys, broker config, VPS IPs, worker pairs) are stored in Redis hashes and managed via `seed_credentials.py` or the bridge API.
-
-## Compliance & Auditing
-
-The audit system logs:
-- All trade opens/closes with full context
-- Worker status heartbeats (every 30s)
-- Circuit breaker events (cluster + worker level)
-- Daily compliance reports (CSV export)
-
-Generate report:
 ```bash
-python generate_report.py
+# Start orchestrator
+python lte_v35_v2.py
+
+# Run tests
+pytest tests/test_omni_v2.py -v
+
+# Check test coverage
+pytest tests/test_omni_v2.py --cov=core --cov=modules
+
+# Run specific test
+pytest tests/test_omni_v2.py::test_confidence_threshold_execute -v
 ```
 
-## Gotchas
+## Usage Example
 
-1. **AI Validator Latency** - 2 sequential Claude calls (~2-4s), run async in production
-2. **Tier Multipliers** - VIP 2x, PRO 1.5x position size; ensure risk limits account for this
-3. **Async Bridges** - Social media bridges use `schedule_alert` / background workers
-4. **Hardcoded Correlations** - XAUUSD/DXY = -0.95; update if regime shifts
-5. **Redis Persistence** - Enable AOF/RDB for audit trail durability
+```python
+from lte_v35_v2 import OmniBrainV2
+from core.mtf_confirmation import mtf_confirmation_full
+from core.confidence_scorer import calculate_confidence, get_signal
+
+# Initialize bot
+bot = OmniBrainV2(account_balance=10000, risk_percent=1.0, max_daily_loss=5.0)
+
+# Feed market data
+market_data = {
+    'EURUSD': {
+        'd1': {...},  # Daily OHLC + indicators
+        'h1': {...},  # Hourly OHLC + indicators
+        'm15': {...}  # 15-min OHLC + indicators
+    }
+}
+
+# Scan and execute
+result = bot.scan_and_execute(market_data)
+print(f"Trades opened: {result['trades_opened']}")
+print(f"Trades blocked: {result['trades_blocked']}")
+
+# Update open trades
+update = bot.update_open_trades(market_data)
+print(f"Trades closed: {update['trades_closed']}")
+
+# Get statistics
+stats = bot.get_statistics()
+print(f"Win rate: {stats['win_rate']}")
+print(f"Daily P&L: {stats['daily_pl']}")
+```
+
+## Module Documentation
+
+### Core Modules
+
+#### `confidence_scorer.py`
+
+Calculates composite confidence from 10 signal components.
+
+```python
+from core.confidence_scorer import calculate_confidence, get_signal
+
+result = calculate_confidence(
+    ob=18, fvg=15, sweep=25, vwap=12, session=10,
+    corr=12, yield_=8, sentiment=7, pattern=18, divergence=16)
+
+print(result['confidence'])  # 0-100
+print(get_signal(result['confidence']))  # EXECUTE, WAIT, or BLOCK
+```
+
+#### `mtf_confirmation.py`
+
+Multi-timeframe confirmation: D1 HTF bias → H1 setup → M15 entry.
+
+```python
+from core.mtf_confirmation import mtf_confirmation_full
+
+result = mtf_confirmation_full(d1_data, h1_data, m15_data, 'EURUSD')
+if result['mtf_status'] == 'CONFIRMED':
+    print(f"Enter at ${result['m15_entry']['price']:.4f}")
+```
+
+#### `risk_manager.py`
+
+Position sizing, dynamic grid, stop-loss/take-profit, circuit breaker.
+
+```python
+from core.risk_manager import calculate_position_size, calculate_dynamic_grid
+
+pos = calculate_position_size(10000, 1.0, 1.0950, 1.0900, 'EURUSD')
+print(f"Position: {pos['lots']} lots, Risk: ${pos['risk_amount']}")
+
+grid = calculate_dynamic_grid(confidence=82, market_weather='SUNNY', ...)
+print(f"Grid levels: {grid['grid_levels']}, Spacing: {grid['grid_spacing']}")
+```
+
+### Modules
+
+#### `sentiment_engine.py`
+
+AI sentiment from news, social, macro events.
+
+```python
+from modules.sentiment_engine import forex_sentiment_analyzer
+
+sentiment = forex_sentiment_analyzer(
+    pair='EURUSD',
+    news_articles=[...],
+    social_signals={...},
+    macro_events=[...])
+
+print(f"Sentiment: {sentiment['sentiment_label']}")  # BULLISH, NEUTRAL, BEARISH
+```
+
+#### `correlation_engine.py`
+
+Pair correlations, breakdown detection, arbitrage signals.
+
+```python
+from modules.correlation_engine import detect_correlation_breakdown
+
+breakdown = detect_correlation_breakdown(
+    eurusd_data, gbpusd_data, expected_corr=0.85, threshold=0.25)
+
+if breakdown['breakdown']:
+    print(f"Trade: {breakdown['trade_signal']}")
+```
+
+## Testing
+
+Run full test suite:
+
+```bash
+pytest tests/ -v
+```
+
+Run specific test category:
+
+```bash
+pytest tests/test_omni_v2.py -k "confidence" -v
+pytest tests/test_omni_v2.py -k "mtf" -v
+pytest tests/test_omni_v2.py -k "risk" -v
+```
+
+Run integration tests only:
+
+```bash
+pytest tests/ -m integration
+```
+
+Check coverage:
+
+```bash
+pytest tests/ --cov=core --cov=modules --cov-report=html
+```
+
+## Performance Targets
+
+- **Win Rate**: 60%+ (target after 50 trades)
+- **Risk/Reward**: 1:2+ (1 unit risk for 2 unit profit)
+- **Drawdown**: < 20% (circuit breaker at 5% daily, 10% weekly)
+- **Confidence Score**: Execute only ≥75 (< 50 trades/week)
+
+## Roadmap
+
+### v2.1 (Next 2 weeks)
+
+- [ ] Ollama local AI integration for entry validation
+- [ ] YouTube → Telegram auto-sync
+- [ ] Instagram @forextrader_9 content pipeline
+- [ ] 25 advanced innovations (iceberg orders, SMC clusters, chaos theory, etc.)
+
+### v2.2
+
+- [ ] Deep reinforcement learning for threshold optimization
+- [ ] Real-time portfolio heatmap visualization
+- [ ] Multi-broker MT5 sync (3+ brokers)
+
+### v3.0
+
+- [ ] Cloud deployment (AWS/GCP)
+- [ ] Mobile app (iOS/Android)
+- [ ] Live subscriber management + payment processing
+
+## Contributing
+
+1. Fork repo
+2. Create feature branch: `git checkout -b feature/name`
+3. Commit changes: `git commit -am 'Add feature'`
+4. Push: `git push origin feature/name`
+5. Submit PR
 
 ## License
 
-Proprietary - OmniBrain v2 Trading System
+Apache 2.0 — Commercial use permitted.
+
+## Support
+
+- **Issues**: GitHub Issues
+- **Docs**: https://docs.omnibrain.io
+- **Telegram**: @omnibrainv2_support
+
+## Disclaimer
+
+Trading is risky. Past performance ≠ future results. This system is for educational purposes. Always use proper risk management and test on demo accounts first.
+
+---
+
+**Built for institutional traders.** Run on Android (UserLand) or VPS. No cloud dependencies.
