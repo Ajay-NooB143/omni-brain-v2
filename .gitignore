@@ -222,3 +222,4 @@ health_check_reports/
 !LICENSE
 !requirements.txt
 !package.json
+*.log
