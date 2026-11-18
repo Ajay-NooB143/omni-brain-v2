@@ -11,6 +11,7 @@ setup(
         "numpy>=1.24.0",
         "pandas>=2.0.0",
     ],
+    extras_require={"dev": ["pytest"], "research": ["finrl", "Riskfolio-Lib"]},
     python_requires=">=3.11",
     entry_points={
         "console_scripts": [

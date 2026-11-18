@@ -14,6 +14,10 @@ from core.risk_manager import (
 )
 from modules.sentiment_engine import forex_sentiment_analyzer
 from modules.correlation_engine import detect_correlation_breakdown
+from modules.research_integrations import (
+    check_optional_dependencies,
+    optimize_portfolio_weights,
+)
 
 # Setup logging
 logging.basicConfig(
@@ -254,6 +258,20 @@ class OmniBrainV2:
         logger.info(
             f"TRADE CLOSED: {trade['pair']} @ {close_price:.4f}, "
             f"P&L ${profit:.2f} ({close_reason})"
+        )
+
+    def get_research_integration_status(self):
+        """Report optional research integrations without affecting trade execution."""
+        return check_optional_dependencies()
+
+    def optimize_research_portfolio(self, asset_returns, *, risk_measure="MV",
+                                    objective="Sharpe", risk_free_rate=0.0):
+        """Return Riskfolio research weights; never routes or sizes live orders."""
+        return optimize_portfolio_weights(
+            asset_returns,
+            risk_measure=risk_measure,
+            objective=objective,
+            risk_free_rate=risk_free_rate,
         )
 
     def get_statistics(self):
