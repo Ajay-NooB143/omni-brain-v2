@@ -327,3 +327,17 @@ Trading is risky. Past performance ≠ future results. This system is for educat
 ---
 
 **Built for institutional traders.** Run on Android (UserLand) or VPS. No cloud dependencies.
+
+## Optional Quant Research Integrations
+
+- **FinRL**: optional equity-only reinforcement-learning research adapter. It is not used for XAUUSD/FX execution.
+- **Riskfolio-Lib**: optional portfolio-risk and allocation analysis from aligned historical returns. Returned weights are research outputs only and never submit orders.
+- Both integrations are lazy-loaded and isolated from the existing execution path. They are not installed by default.
+
+Install on a compatible research machine only:
+
+    pip install -e ".[research]"
+
+See [docs/RESEARCH_INTEGRATIONS.md](docs/RESEARCH_INTEGRATIONS.md) for API details, validation rules, and safety boundaries. The adapter tests can run with Python's standard library:
+
+    python -m unittest tests/test_research_integrations.py -v
